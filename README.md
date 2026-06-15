@@ -1,6 +1,6 @@
 # IntraKnot Database
 
-A community algorithm database for [IntraKnot](https://github.com/Ideogenesis-AI/IntraKnot) — a curated collection of reusable algorithm scripts including observables, model definitions, interaction maps, and post-processing utilities.
+A community algorithm database for the [Alice](https://github.com/Ideogenesis-AI/Alice) project managed by [IntraKnot](https://github.com/Ideogenesis-AI/IntraKnot) — a curated collection of reusable algorithm scripts including observables, model definitions, interaction maps, and post-processing utilities.
 
 ## How it works
 
