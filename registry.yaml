@@ -1,0 +1,18 @@
+description: Community algorithm scripts for Alice projects managed by IntraKnot
+
+categories:
+  models:
+    description: Model builders for Alice
+    scripts:
+      - name: model_bfg
+        file: models/model_bfg.py
+        description: Balents-Fisher-Girvin model builder for Alice
+        sha256: 41e246e3edfb2bc7a0a117a4bd9c1570984acb8fe5eee9d5c882aa13b09e6d24
+
+  intrcmaps:
+    description: Interaction maps for Alice
+    scripts:
+      - name: intrcmap_bfg
+        file: intrcmaps/intrcmap_bfg.py
+        description: Interaction map for the Balents-Fisher-Girvin model on Kagome
+        sha256: 29b809abf07793bf0d833e51e1800c36dfa55d7f4c916e397054d3e4453bf377
