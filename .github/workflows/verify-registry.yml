@@ -1,0 +1,20 @@
+name: Verify registry
+
+on:
+  pull_request:
+    branches:
+      - primary
+
+jobs:
+  verify-registry:
+    name: verify-registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Check SHA-256 digests
+        run: python tools/verify_registry.py
