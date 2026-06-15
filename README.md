@@ -78,6 +78,28 @@ categories:
 
 > **Note:** IntraKnot fetches scripts from the `primary` branch. Make sure your file paths in `registry.yaml` match the actual file locations in the repository.
 
+## Integrity
+
+Every `sha256` field in `registry.yaml` must match the SHA-256 digest of the file it references.  Two mechanisms enforce this:
+
+**Local check (before opening a PR)**
+
+Run the verification utility from the repository root:
+
+```bash
+python tools/verify_registry.py
+```
+
+It prints `OK`, `MISMATCH`, or `MISSING` for each entry and exits non-zero on any failure.  Recompute a hash after editing a file with:
+
+```bash
+sha256sum models/my_script.py
+```
+
+**CI gate (on every pull request)**
+
+The `verify-registry` GitHub Actions workflow runs `tools/verify_registry.py` automatically on every PR targeting `primary`.  A failing check blocks the merge.
+
 ## License
 
 IntraKnot Database is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. This means you are free to use, modify, and distribute this software under the terms of the GPL-3.0 license. We encourage you to share any improvements you make back to the community, helping IntraKnot grow and benefit all users. See the [LICENSE](LICENSE) file for the full license text. For more information about GPL-3.0, visit https://www.gnu.org/licenses/gpl-3.0.html
