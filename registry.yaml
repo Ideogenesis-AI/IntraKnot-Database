@@ -7,7 +7,7 @@ categories:
       - name: model_bfg
         file: models/model_bfg.py
         description: Balents-Fisher-Girvin model builder for Alice
-        sha256: 41e246e3edfb2bc7a0a117a4bd9c1570984acb8fe5eee9d5c882aa13b09e6d24
+        sha256: 5a3282ae34a5d68171bf60c45d45acc4683ef0fb3e3b46a8599d4ea3e59f9711
 
   intrcmaps:
     description: Interaction maps for Alice

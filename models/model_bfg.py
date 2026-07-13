@@ -92,7 +92,11 @@ def build_bfg(
             continue
 
         if 'XY' in intr.label:
-            intr.cpl           = -Jperp
+            # Nicole's U1 Sp/Sm are spherical components:
+            # Sp = -S+ / sqrt(2), Sm = S- / sqrt(2). The two tensor
+            # products therefore carry a factor 1/2, so use -2*Jperp
+            # to implement -Jperp * (S+_i S-_j + S-_i S+_j).
+            intr.cpl           = -2.0 * Jperp
             intr.leading_tnsr  = xy4.clone()
             intr.terminal_tnsr = xy4dag.clone()
             if intr.terminal_site > intr.leading_site + 1:
