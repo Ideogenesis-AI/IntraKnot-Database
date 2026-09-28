@@ -8,6 +8,10 @@ categories:
         file: models/model_bfg.py
         description: Balents-Fisher-Girvin model builder for Alice
         sha256: 5a3282ae34a5d68171bf60c45d45acc4683ef0fb3e3b46a8599d4ea3e59f9711
+      - name: model_moire_c4
+        file: models/model_moire_c4.py
+        description: LLL-projected C4 moire model builder for Alice
+        sha256: a4c3b224270fdf73b9f57ee7221756f6a3de990a3467c7126c4d87c858902554
 
   intrcmaps:
     description: Interaction maps for Alice
@@ -16,3 +20,7 @@ categories:
         file: intrcmaps/intrcmap_bfg.py
         description: Interaction map for the Balents-Fisher-Girvin model on Kagome
         sha256: 29b809abf07793bf0d833e51e1800c36dfa55d7f4c916e397054d3e4453bf377
+      - name: intrcmap_moire_c4
+        file: intrcmaps/intrcmap_moire_c4.py
+        description: Interaction map for the LLL-projected C4 moire model on a cylinder chain
+        sha256: 01828ff6103978bed0aea296702fd303152e8a413a636ede4b8be176ae37a51c
