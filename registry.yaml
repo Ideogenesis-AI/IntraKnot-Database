@@ -11,7 +11,7 @@ categories:
       - name: model_moire_c4
         file: models/model_moire_c4.py
         description: LLL-projected C4 moire model builder for Alice
-        sha256: a4c3b224270fdf73b9f57ee7221756f6a3de990a3467c7126c4d87c858902554
+        sha256: 809fa874fe7b1972ab3f38c89e9b1a591227acf667820c029c8effc41df03baa
 
   intrcmaps:
     description: Interaction maps for Alice
