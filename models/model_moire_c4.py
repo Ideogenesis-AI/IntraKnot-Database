@@ -583,6 +583,18 @@ def build_moire_c4(
     twobody.report(warn_frac)
     logger.info("")
 
+    # AutoMPO repeatedly compresses the running operator sum.  At production
+    # sizes, the interaction-map order contains long sequences that decay to
+    # ~1e-10 and then jump back to ~1e-2 at the next index family.  Adding in
+    # that order can make the repeated norm redistribution ill-conditioned
+    # and eventually feed non-finite values to an SVD.  Magnitude ordering is
+    # algebraically neutral, deterministic (Python's sort is stable), and
+    # keeps each partial sum well scaled.  Zero terms naturally move last and
+    # remain filtered by build_hamiltonian.
+    interactions.sort(key=lambda interaction: abs(interaction.cpl), reverse=True)
+    logger.info("  Ordered interactions by descending |coupling| for stable AutoMPO accumulation")
+    logger.info("")
+
     # Attach coefficient tables on the ops dict for tests / inspection.
     ops['_moire_B'] = B
     ops['_moire_V'] = Vtable
