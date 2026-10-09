@@ -26,6 +26,7 @@ Interaction2Site / InteractionNSite objects for AutoMPO construction.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -376,7 +377,7 @@ class _ChannelTally:
         self.sum_drop = 0.0
         self.max_drop = 0.0
 
-    def keep(self, cpl: float) -> bool:
+    def keep(self, cpl: float, *, force: bool = False) -> bool:
         """Record `cpl` and report whether it survives the threshold.
 
         A zero reference means the channel vanishes identically (`V0 = 0` or
@@ -387,7 +388,7 @@ class _ChannelTally:
         mag = abs(cpl)
         self.n_total += 1
         self.sum_total += mag
-        if self.ref == 0.0 or mag < self.thresh:
+        if not force and (self.ref == 0.0 or mag < self.thresh):
             self.n_drop += 1
             self.sum_drop += mag
             self.max_drop = max(self.max_drop, mag)
@@ -431,7 +432,10 @@ def build_moire_c4(
     lB: float = 1.0,
     ny: int = 2,
     V0: float = 0.3,
-    C: float = 1.0,
+    U0: Optional[float] = None,
+    C: Optional[float] = None,
+    mu: float = 0.0,
+    ph_correction: bool = True,
     lam: float = 2.0,
     cpl_rtol: float = 1e-10,
     warn_frac: float = 1e-6,
@@ -457,9 +461,20 @@ def build_moire_c4(
         Number of flux cells along the cylinder circumference.
     V0:
         C4 potential amplitude.
+    U0:
+        Yukawa strength in the physical convention `C = sqrt(2*pi) * U0`.
+        The default corresponds to the legacy `C=1` model.
     C:
-        Yukawa interaction strength. Its scale relative to `V0` depends on the
-        half-weighted two-body convention documented in `ordered_pair_W`.
+        Legacy interaction-strength parameter, accepted for frozen configs.
+        Specify either `U0` or `C`, never both.
+    mu:
+        Uniform offset `-mu * sum_i n_i` added to the built-in orbital-
+        dependent particle-hole term. The latter has coefficient
+        `sum_{j != i} U_ij / 2` from retained density couplings. At V0=0,
+        `mu=0` restores particle-hole symmetry; nonzero V0 or mu breaks it.
+    ph_correction:
+        Include the orbital-dependent particle-hole correction by default.
+        Set to `False` to omit it while retaining the uniform `mu` term.
     lam:
         Screening length λ, as a bare length in the same units as `lB`. Sources
         that quote λ in units of the orbital spacing `2π lB² / Ly` must be
@@ -467,7 +482,9 @@ def build_moire_c4(
     cpl_rtol:
         Relative coupling-truncation threshold. A term is discarded when its
         magnitude falls below `cpl_rtol` times its channel reference scale:
-        `max|B|` for the one-body terms and `V[0,0]` for the two-body terms.
+        `max(max|B|, max|mu_i|)` for the one-body terms and `V[0,0]` for the
+        two-body terms. The particle-hole correction, when enabled, is always
+        retained.
         This is the only truncation control — the interaction map enumerates
         every admissible term, since only this stage knows the coefficients.
     warn_frac:
@@ -482,6 +499,23 @@ def build_moire_c4(
     """
     if symmetry != 'U1':
         raise ValueError(f"moire_c4 requires symmetry='U1', got '{symmetry}'")
+    if U0 is not None and C is not None:
+        raise ValueError("Specify model.U0 or legacy model.C, not both")
+    if U0 is not None:
+        if not math.isfinite(U0):
+            raise ValueError(f"model.U0 must be finite, got {U0}")
+        C = math.sqrt(2.0 * math.pi) * U0
+    elif C is None:
+        C = 1.0
+    if not math.isfinite(C):
+        raise ValueError(f"model.C must be finite, got {C}")
+    if not isinstance(mu, (int, float)) or not math.isfinite(mu):
+        raise ValueError(f"model.mu must be a finite number, got {mu!r}")
+    if type(ph_correction) is not bool:
+        raise ValueError(
+            f"model.ph_correction must be a boolean, got {ph_correction!r}"
+        )
+    U0 = C / math.sqrt(2.0 * math.pi)
     # `**_ignored` would otherwise swallow a stale `vtol`, silently falling back
     # to the `cpl_rtol` default. Since the two differ in meaning (absolute vs
     # relative to a channel reference), that would change the Hamiltonian
@@ -507,13 +541,16 @@ def build_moire_c4(
     logger.info("─" * 60)
     logger.info("")
     logger.info(f"  lB={lB}, ny={ny}, a0={a0:.6f}, Ly={Ly:.6f}")
-    logger.info(f"  alpha={alpha:.6f}, V0={V0}, C={C}, lam={lam}")
+    logger.info(
+        f"  alpha={alpha:.6f}, V0={V0}, U0={U0}, C={C}, mu={mu}, "
+        f"ph_correction={ph_correction}, lam={lam}"
+    )
     logger.info(f"  max|B|={np.max(np.abs(B)):.6e},  V00={Vtable[0, 0]:.6e}")
     logger.info(f"  cpl_rtol={cpl_rtol:.1e}, warn_frac={warn_frac:.1e}")
     logger.info("")
 
-    onebody = _ChannelTally('one-body', float(np.max(np.abs(B))), cpl_rtol)
     twobody = _ChannelTally('two-body', float(Vtable[0, 0]), cpl_rtol)
+    density_row_sum = np.zeros(L, dtype=float)
 
     # Cached only for the density-density channel (p == 0), where the window is
     # [N4, I4 ... I4, N4] and its span |r| + 1 is fixed by r alone. Pair-hopping
@@ -522,31 +559,6 @@ def build_moire_c4(
     dens_window_cache: Dict[int, List[Tensor]] = {}
 
     for intr in interactions:
-        if isinstance(intr, Interaction1Site) and 'DIAG' in intr.label:
-            # Diagonal B_nn is real for C4.
-            cpl = float(B[intr.site, intr.site].real)
-            if onebody.keep(cpl):
-                intr.cpl = cpl
-                intr.tnsr = ch['N4'].clone()
-            else:
-                intr.cpl = 0.0
-            continue
-
-        if isinstance(intr, Interaction2Site) and 'HOP' in intr.label:
-            i, j = intr.leading_site, intr.terminal_site
-            # Hermitian hopping: store B_ji as cpl with G4/G4dag (= c†_i c_j + h.c.
-            # channel sum). For real C4, B_ji = B_ij = V0 e^{-π/2}.
-            cpl = float(B[j, i].real)
-            if onebody.keep(cpl):
-                intr.cpl = cpl
-                intr.leading_tnsr = ch['G4'].clone()
-                intr.terminal_tnsr = ch['G4dag'].clone()
-                if j > i + 1:
-                    intr.intermid_tnsr = ch['Z4mid'].clone()
-            else:
-                intr.cpl = 0.0
-            continue
-
         if isinstance(intr, InteractionNSite) and (
             'PAIR' in intr.label or 'DENS' in intr.label
         ):
@@ -563,6 +575,8 @@ def build_moire_c4(
 
             p = m - l
             if p == 0:
+                density_row_sum[m] += W
+                density_row_sum[n] += W
                 # Density-density n_m n_n on [m, n]. The window is fixed by the
                 # separation n - m = |r| alone, so one template serves every m
                 # at that separation. Pair hopping (p != 0) has no such
@@ -579,6 +593,44 @@ def build_moire_c4(
                 intr.tnsrs = _four_op_window(m, n, k, l, ch)
             continue
 
+    ph_mu_profile = density_row_sum / 2.0
+    mu_profile = np.full(L, float(mu))
+    if ph_correction:
+        mu_profile += ph_mu_profile
+    onebody = _ChannelTally(
+        'one-body', max(float(np.max(np.abs(B))), float(np.max(np.abs(mu_profile)))),
+        cpl_rtol,
+    )
+    for intr in interactions:
+        if isinstance(intr, Interaction1Site) and 'DIAG' in intr.label:
+            cpl = float(B[intr.site, intr.site].real) - mu_profile[intr.site]
+            if onebody.keep(cpl, force=ph_correction):
+                intr.cpl = cpl
+                intr.tnsr = ch['N4'].clone()
+            else:
+                intr.cpl = 0.0
+        elif isinstance(intr, Interaction2Site) and 'HOP' in intr.label:
+            i, j = intr.leading_site, intr.terminal_site
+            # Real C4: B_ji = B_ij = V0 exp(-pi/2).
+            cpl = float(B[j, i].real)
+            if onebody.keep(cpl):
+                intr.cpl = cpl
+                intr.leading_tnsr = ch['G4'].clone()
+                intr.terminal_tnsr = ch['G4dag'].clone()
+                if j > i + 1:
+                    intr.intermid_tnsr = ch['Z4mid'].clone()
+            else:
+                intr.cpl = 0.0
+
+    logger.info(
+        "  PH correction enabled=%s; profile min=%.6g max=%.6g; uniform mu=%g",
+        ph_correction, float(np.min(ph_mu_profile)), float(np.max(ph_mu_profile)), mu,
+    )
+    if not ph_correction or V0 != 0.0 or mu != 0.0:
+        logger.info(
+            "  PH restoration of the interacting Hamiltonian requires "
+            "ph_correction=true, V0=0, and mu=0."
+        )
     onebody.report(warn_frac)
     twobody.report(warn_frac)
     logger.info("")
@@ -599,6 +651,9 @@ def build_moire_c4(
     ops['_moire_B'] = B
     ops['_moire_V'] = Vtable
     ops['_moire_Verr'] = Verr
+    ops['_moire_density_row_sum'] = density_row_sum
+    ops['_moire_ph_mu_profile'] = ph_mu_profile
+    ops['_moire_mu_profile'] = mu_profile
     # Expose the discard budget so it can be audited programmatically rather
     # than only scraped from the log.
     ops['_moire_discard'] = {
@@ -612,7 +667,8 @@ def build_moire_c4(
     }
     ops['_moire_params'] = {
         'lB': lB, 'ny': ny, 'a0': a0, 'Ly': Ly, 'alpha': alpha,
-        'V0': V0, 'C': C, 'lam': lam, 'g0': g0,
+        'V0': V0, 'U0': U0, 'C': C, 'mu': mu,
+        'ph_correction': ph_correction, 'lam': lam, 'g0': g0,
     }
 
     return spc, ops
