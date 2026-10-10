@@ -31,6 +31,24 @@ iknot campaign install intraknot-database:observables/spin_corr.py
 iknot database update
 ```
 
+## Moire C4 model parameters
+
+`models/model_moire_c4.py` accepts the interaction scale `U0`, with internal
+`C = sqrt(2*pi) * U0`. Legacy configurations may still specify `C` instead;
+specifying both is an error. The default scale remains the legacy `C=1`.
+
+The model includes the finite-cylinder particle-hole (PH) interaction
+correction by default. For retained density couplings `U_ij`, its one-body
+contribution is `-sum_i (sum_{j != i} U_ij / 2) n_i`. The numeric `mu`
+parameter adds a uniform `-mu * sum_i n_i`. Set `ph_correction=false` to omit
+the PH correction without removing the uniform chemical potential. At
+`V0=0`, `mu=0`, and `ph_correction=true`, the model is PH symmetric.
+
+Installing this updated builder changes the Hamiltonian of earlier
+configurations that omit `ph_correction`: they now include the PH term. Set
+`ph_correction=false` to reproduce the previous bare-interaction convention.
+Existing frozen IntraKnot runs keep their original model snapshots.
+
 ## Repository structure
 
 ```
@@ -95,6 +113,9 @@ It prints `OK`, `MISMATCH`, or `MISSING` for each entry and exits non-zero on an
 ```bash
 sha256sum models/my_script.py
 ```
+
+The Moire model tests also require Alice and Nicole. Run them in a compatible
+project environment with `python -m unittest discover -s tests -v`.
 
 **CI gate (on every pull request)**
 
